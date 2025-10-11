@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <pthread.h>
 #include "uthash.h"
 
 void error(char *msg)
@@ -20,6 +21,11 @@ typedef struct
     char *value; // value
     UT_hash_handle hh;
 } kv_pair;
+
+typedef struct threadarg{
+    int clisockfd;
+}threadarg;
+
 
 kv_pair *table = NULL;
 
@@ -168,47 +174,18 @@ void print_table()
     }
 }
 
-int main(int argc, char *argv[])
-{
-    struct sockaddr_in serv_addr, cli_addr;
-    int sockfd, portno, clilen, clisockfd;
+
+void *jobfunc(void *arg){
+
+    threadarg *info;
+    info = (threadarg *)arg;
+    int clisockfd = info->clisockfd;
     char **tokens;
 
-    if (argc < 2)
-    {
-        error("Incorrect number of arguments: ");
-    }
+    printf("inside function %d \n" , info->clisockfd);
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1)
-    {
-        error("Error opening Socket: ");
-    }
-
-    memset((char *)&serv_addr, 0, sizeof(serv_addr));
-    portno = atoi(argv[1]);
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(portno);
-
-    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        error("Error binding: ");
-    }
-
-    listen(sockfd, 5);
-    clilen = sizeof(cli_addr);
-
+    send_string(clisockfd, "OK");
     while (1)
-    {
-        clisockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-        if (clisockfd < 0)
-        {
-            perror("Error Accepting the client connection: ");
-        }
-        send_string(clisockfd, "OK");
-
-        while (1)
         {
             int ntokens = 0;
             tokens = malloc(5 * sizeof(char *));
@@ -324,6 +301,52 @@ int main(int argc, char *argv[])
         {
             close(clisockfd);
         }
+}
+
+int main(int argc, char *argv[])
+{
+    struct sockaddr_in serv_addr, cli_addr;
+    int sockfd, portno, clilen, clisockfd;
+    char **tokens;
+
+    if (argc < 2)
+    {
+        error("Incorrect number of arguments: ");
+    }
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        error("Error opening Socket: ");
+    }
+
+    memset((char *)&serv_addr, 0, sizeof(serv_addr));
+    portno = atoi(argv[1]);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(portno);
+
+    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        error("Error binding: ");
+    }
+
+    listen(sockfd, 5);
+    clilen = sizeof(cli_addr);
+
+    while (1)
+    {
+        clisockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+        if (clisockfd < 0)
+        {
+            perror("Error Accepting the client connection: ");
+        }
+        pthread_t newthread;
+        threadarg *arg = NULL;
+        arg = malloc(sizeof(threadarg));
+        arg->clisockfd = clisockfd;
+        pthread_create(&newthread, NULL, jobfunc, arg);
+        pthread_detach(newthread);
     }
 
     int key = 5;
