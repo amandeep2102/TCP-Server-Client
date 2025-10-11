@@ -245,9 +245,23 @@ int main(int argc, char *argv[])
                     perror("Invalid number of arguments!\n");
                     continue;
                 }
+                char *v = NULL;
                 int key = atoi(tokens[1]);
                 int valuesize = atoi(tokens[2]);
-                add_pair(&key, valuesize, tokens[3]);
+
+                v = get_value(key);
+
+                if (v != NULL)
+                {
+                    send_string(clisockfd, "Already Exists");
+                }
+                else
+                {
+                    add_pair(&key, valuesize, tokens[3]);
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "Created key -> %d value -> %s", key, tokens[3]);
+                    send_string(clisockfd, buf);
+                }
             }
             else if (strcmp(tokens[0], "read") == 0)
             {

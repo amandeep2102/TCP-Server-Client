@@ -97,17 +97,55 @@ int main(int argc, char *argv[])
     int clisockfd, portno;
     struct hostent *server;
     struct sockaddr_in serv_addr;
+    FILE *fp;
+    char line[1024];
+
+    if (argc < 2)
+    {
+        printf("Invalid number of arguments Usage: ./<Progname> interactive or batch <file>\n");
+        exit(1);
+    }
+
+    if (strcmp(argv[1], "batch") == 0)
+    {
+        if (argc < 3)
+        {
+            perror("Invalid number of arguments");
+            exit(1);
+        }
+
+        fp = fopen(argv[2], "r");
+    }
+    else if (strcmp(argv[1], "interactive") != 0)
+    {
+        perror("Wrong option!");
+        exit(1);
+    }
 
     while (1)
     {
-        printf("> ");
-        if (fgets(input, sizeof(input), stdin) == NULL)
+        if (strcmp(argv[1], "batch") == 0)
         {
-            printf("Error reading input\n");
-            return 1;
+            if (feof(fp))
+            {
+                exit(0);
+            }
+            if (fgets(input, sizeof(input), fp) == NULL)
+            {
+                perror("Error reading from the file!");
+                exit(1);
+            }
+        }
+        else if (strcmp(argv[1], "interactive") == 0)
+        {
+            printf("> ");
+            if (fgets(input, sizeof(input), stdin) == NULL)
+            {
+                perror("Error reading input\n");
+                exit(1);
+            }
         }
 
-        // Remove newline at the end if present
         input[strcspn(input, "\n")] = '\0';
 
         tokenize(input);
@@ -200,15 +238,6 @@ int main(int argc, char *argv[])
             {
                 char *value;
                 receive_string(clisockfd, &value);
-                // if (strcmp(value, "ERROR") == 0)
-                // {
-                //     printf("Key doesn't Exist!\n");
-                // }
-                // else
-                // {
-                //     printf("key -> %d, value -> %s \n", atoi(tokens[1]), value);
-                // }
-
                 printf("%s\n", value);
             }
             else if (strcmp(tokens[0], "update") == 0)
@@ -223,6 +252,11 @@ int main(int argc, char *argv[])
                 receive_string(clisockfd, &msg);
                 printf("%s\n", msg);
             }
+            else if(strcmp(tokens[0], "create") == 0){
+                char *msg;
+                receive_string(clisockfd, &msg);
+                printf("%s\n", msg);
+            }
         }
 
         for (int i = 0; i < 5; i++)
@@ -233,7 +267,6 @@ int main(int argc, char *argv[])
         free(tokens);
         tokens = NULL;
     }
-
     close(clisockfd);
     return 0;
 }
