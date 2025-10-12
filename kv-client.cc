@@ -18,7 +18,7 @@ void error(char *msg)
 
 void tokenize(char *input)
 {
-    tokens = malloc(5 * sizeof(char *));
+    tokens = (char **)malloc(5 * sizeof(char *));
 
     for (int i = 0; i < 5; i++)
     {
@@ -31,7 +31,7 @@ void tokenize(char *input)
     while (token != NULL)
     {
         // printf("%s\n", token);
-        tokens[i] = malloc(strlen(token) + 1);
+        tokens[i] = (char *)malloc(strlen(token) + 1);
         strcpy(tokens[i], token);
         token = strtok(NULL, delim); // continue tokenizing
         i++;
@@ -62,7 +62,7 @@ int receive_string(int sockfd, char **out)
         perror("Error reading string length");
         return -1;
     }
-    *out = malloc(len + 1);
+    *out = (char *)malloc(len + 1);
     if (!*out)
         return -1;
 

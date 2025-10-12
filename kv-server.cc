@@ -7,9 +7,12 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <bits/stdc++.h>
 #include "uthash.h"
+using namespace std;
+#define NUM_THREADS 2
 
-void error(char *msg)
+void error(const char *msg)
 {
     perror(msg);
     exit(1);
@@ -22,12 +25,16 @@ typedef struct
     UT_hash_handle hh;
 } kv_pair;
 
-typedef struct threadarg{
+typedef struct request
+{
     int clisockfd;
-}threadarg;
+} request;
 
-
+// GLOBAL WARIABLES
 kv_pair *table = NULL;
+queue<request> clientqueue;
+pthread_mutex_t pmutex;
+pthread_cond_t empty_cond;
 
 int update_pair(int key, const int valuesize, const char *new_value)
 {
@@ -36,7 +43,7 @@ int update_pair(int key, const int valuesize, const char *new_value)
     if (s)
     {
         free(s->value);
-        s->value = malloc(valuesize + 1);
+        s->value = (char *)malloc(valuesize + 1);
         strcpy(s->value, new_value);
         s->value[valuesize] = '\0';
         return 0;
@@ -49,9 +56,9 @@ int update_pair(int key, const int valuesize, const char *new_value)
 
 void add_pair(const int *key, const int valuesize, const char *value)
 {
-    kv_pair *s = malloc(sizeof(kv_pair));
+    kv_pair *s = (kv_pair *)malloc(sizeof(kv_pair));
     s->key = *key;
-    s->value = malloc(valuesize + 1);
+    s->value = (char *)malloc(valuesize + 1);
     strcpy(s->value, value);
     s->value[valuesize] = '\0';
     HASH_ADD_INT(table, key, s);
@@ -104,7 +111,7 @@ char *concat_strings(int count, ...)
     }
 
     va_end(args);
-    char *result = malloc(total_len + 1);
+    char *result = (char *)malloc(total_len + 1);
     if (!result)
         return NULL;
     result[0] = '\0';
@@ -143,7 +150,7 @@ int receive_string(int sockfd, char **out)
         perror("Error reading string length");
         return -1;
     }
-    *out = malloc(len + 1);
+    *out = (char *)malloc(len + 1);
     if (!*out)
         return -1;
 
@@ -174,21 +181,33 @@ void print_table()
     }
 }
 
-
-void *jobfunc(void *arg){
-
-    threadarg *info;
-    info = (threadarg *)arg;
-    int clisockfd = info->clisockfd;
-    char **tokens;
-
-    printf("inside function %d \n" , info->clisockfd);
-
-    send_string(clisockfd, "OK");
+void *jobfunc(void *arg)
+{
     while (1)
+    {
+        int threadid = *((int *)arg);
+        printf("inside the thread no. %d \n", threadid);
+
+        pthread_mutex_lock(&pmutex);
+        while (clientqueue.empty())
+        {
+            pthread_cond_wait(&empty_cond, &pmutex);
+        }
+
+        request info;
+        info = clientqueue.front();
+        clientqueue.pop();
+        int clisockfd = info.clisockfd;
+        char **tokens;
+        pthread_mutex_unlock(&pmutex);
+
+        send_string(clisockfd, "OK");
+        printf("inside function %d thread id %d\n", info.clisockfd, threadid);
+
+        while (1)
         {
             int ntokens = 0;
-            tokens = malloc(5 * sizeof(char *));
+            tokens = (char **)malloc(5 * sizeof(char *));
             for (int i = 0; i < 5; i++)
             {
                 tokens[i] = NULL;
@@ -301,13 +320,20 @@ void *jobfunc(void *arg){
         {
             close(clisockfd);
         }
+    }
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
     struct sockaddr_in serv_addr, cli_addr;
-    int sockfd, portno, clilen, clisockfd;
+    int sockfd, portno, clisockfd;
+    socklen_t clilen;
     char **tokens;
+    struct request req;
+
+    pthread_t threads[NUM_THREADS];
+    int threadid[NUM_THREADS];
 
     if (argc < 2)
     {
@@ -334,6 +360,16 @@ int main(int argc, char *argv[])
     listen(sockfd, 5);
     clilen = sizeof(cli_addr);
 
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
+        threadid[i] = i;
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
+        pthread_create(&threads[i], NULL, jobfunc, &threadid[i]);
+    }
+
     while (1)
     {
         clisockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
@@ -341,16 +377,16 @@ int main(int argc, char *argv[])
         {
             perror("Error Accepting the client connection: ");
         }
-        pthread_t newthread;
-        threadarg *arg = NULL;
-        arg = malloc(sizeof(threadarg));
-        arg->clisockfd = clisockfd;
-        pthread_create(&newthread, NULL, jobfunc, arg);
-        pthread_detach(newthread);
+        request r;
+        r.clisockfd = clisockfd;
+        pthread_mutex_lock(&pmutex);
+        clientqueue.push(r);
+        pthread_cond_signal(&empty_cond);
+        pthread_mutex_unlock(&pmutex);
     }
 
     int key = 5;
-    char *value = "anyuthoing";
+    const char *value = "anyuthoing";
     add_pair(&key, strlen(value), value);
 
     print_table();
