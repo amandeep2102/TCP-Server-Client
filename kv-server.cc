@@ -10,7 +10,8 @@
 #include <bits/stdc++.h>
 #include "uthash.h"
 using namespace std;
-#define NUM_THREADS 2
+
+#define NUM_THREADS 1000
 
 void error(const char *msg)
 {

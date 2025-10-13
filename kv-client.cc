@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/time.h>
 #define h_addr h_addr_list[0]
 
 char **tokens = NULL;
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv_addr;
     FILE *fp;
     char line[1024];
+    struct timeval start, end;
 
     if (argc < 2)
     {
@@ -240,32 +242,25 @@ int main(int argc, char *argv[])
                 receive_string(clisockfd, &value);
                 printf("%s\n", value);
             }
-            else if (strcmp(tokens[0], "update") == 0)
+            else if (strcmp(tokens[0], "update") == 0 || strcmp(tokens[0], "create") == 0 || strcmp(tokens[0], "delete") == 0)
             {
+                gettimeofday(&start, NULL);
                 char *msg;
                 receive_string(clisockfd, &msg);
                 printf("%s\n", msg);
+                free(msg);
+                gettimeofday(&end, NULL);
             }
-            else if (strcmp(tokens[0], "delete") == 0)
-            {
-                char *msg;
-                receive_string(clisockfd, &msg);
-                printf("%s\n", msg);
-            }
-            else if(strcmp(tokens[0], "create") == 0){
-                char *msg;
-                receive_string(clisockfd, &msg);
-                printf("%s\n", msg);
-            }
-        }
 
-        for (int i = 0; i < 5; i++)
-        {
-            if (tokens[i])
-                free(tokens[i]);
+            for (int i = 0; i < 5; i++)
+            {
+                if (tokens[i])
+                    free(tokens[i]);
+            }
+            free(tokens);
+            tokens = NULL;
+            printf("time taken %d\n", (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec);
         }
-        free(tokens);
-        tokens = NULL;
     }
     close(clisockfd);
     return 0;
